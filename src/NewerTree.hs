@@ -341,12 +341,21 @@ k1FromTree t = case fromTree t of
                  Left s -> throwError s
                  Right c -> return c
 
+k1Handler :: (FromTree c) => BTree alg -> String -> GMonad alg (K1 i c p)
+k1Handler t _ = do
+  c <- k1FromTree t
+  return $ K1 c
+
 instance (FromTree c) => GFromTree (K1 i c) where
   gFromTree = do
     x <- lift get
     case x of
       (Hole _) -> return undefined
-      (Forest (Forest _ : xs)) -> undefined
+      (Forest (y:ys)) -> do {
+          c <- k1FromTree y;
+          lift $ put (Forest ys);
+          return $ K1 c
+        } `catchError` k1Handler (Forest (y:ys))
       y -> do
         c <- k1FromTree y
         return $ K1 c

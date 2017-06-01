@@ -4,43 +4,20 @@ module TestGenerics where
 import GHC.Generics
 import NewerTree
 
-data I = I Int
+data AZ a = A | B a | C | D | E | F | G | H | I | J a | K | L | M | N | O | P a | Q | R | S | T | U | V | W | X | Y a | Z
   deriving (Show, Generic)
 
-data P a b = P a b
-  deriving (Show, Generic)
+instance ToTree a => ToTree (AZ a)
+instance FromTree a => FromTree (AZ a)
 
-data P1 a b = P1 (P a b)
-  deriving (Show, Generic)
-
-instance (ToTree a, ToTree b) => ToTree (P a b)
-
-instance (ToTree a, ToTree b) => ToTree (P1 a b)
-
-data AB = A | B
-  deriving (Show, Generic)
-
-instance ToTree AB
-
-data Pair = Pair AB AB
-  deriving (Show, Generic)
-
-instance ToTree Pair
-
-data TwoPair = TwoPair Pair Pair
-  deriving (Show, Generic)
-
-instance ToTree TwoPair
-
-data Test2 = L2 AB AB | R2 AB
-  deriving (Show, Generic)
-
-data Test1 = L Int Int Int Int | R Int Int Int
+data Test1 = L2 Int Int Int Int | R2 Int Int Int
   deriving (Show, Generic)
 
 instance ToTree Test1
+instance FromTree Test1
 
 instance ToTree a => ToTree [a]
+instance FromTree a => FromTree [a]
 
 {-
 L1 (
