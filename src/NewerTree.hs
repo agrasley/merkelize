@@ -52,54 +52,108 @@ instance ToTree Int where
 instance ToTree Integer where
   toTree = serialize
 
-runGToTree :: (GToTree f) => f p -> BTree alg
-runGToTree g = evalState (gToTree g) Nothing
+data ToState alg = ToState {toSum :: ToSum, toProd :: ToProd alg}
 
-reset :: State (Maybe Int) ()
-reset = put Nothing
+type Size = Int
+type Count = Maybe Int
+type ToSum = (Count,Size)
+type ToProd alg = [BTree alg]
+
+resetSum :: State (ToState alg) ()
+resetSum = putSum (Nothing, 0)
+
+getSum :: State (ToState alg) ToSum
+getSum = do
+  s <- get
+  return (toSum s)
+
+putSum :: ToSum -> State (ToState alg) ()
+putSum s = do
+  p <- getProd
+  put $ ToState s p
+
+getProd :: State (ToState alg) (ToProd alg)
+getProd = do
+  s <- get
+  return (toProd s)
+
+putProd :: ToProd alg -> State (ToState alg) ()
+putProd p = do
+  s <- getSum
+  put $ ToState s p
+
+resetProd :: State (ToState alg) ()
+resetProd = putProd []
+
+pushProd :: BTree alg -> State (ToState alg) ()
+pushProd t = do
+  p <- getProd
+  putProd (t:p)
+
+runGToTree :: (GToTree f) => f p -> BTree alg
+runGToTree g = evalState (gToTree g) (ToState (Nothing, 0) [])
 
 class GToTree f where
-  gToTree :: f p -> State (Maybe Int) (BTree alg)
+  gToTree :: f p -> State (ToState alg) (BTree alg)
+  gToSTree :: f p -> State (ToState alg) ()
+
+
+u1ToTree :: Count -> Size -> BTree alg
+u1ToTree Nothing  _ = Empty
+u1ToTree (Just i) s = serialize (i,s)
 
 instance GToTree U1 where
   gToTree U1 = do
-    m <- get
-    reset
-    case m of
-      Nothing -> return Empty
-      Just i  -> return $ Leaf (S.encode i)
+    (m,s) <- getSum
+    resetSum
+    return $ u1ToTree m s
+  gToSTree U1 = do
+    (m,s) <- getSum
+    resetSum
+    pushProd (u1ToTree m s)
 
 instance GToTree a => GToTree (M1 i c a) where
   gToTree = gToTree . unM1
+  gToSTree = gToSTree . unM1
+
+prodToTree :: Count -> Size -> ToProd alg -> BTree alg
+prodToTree Nothing _ p = Forest (reverse p)
+prodToTree (Just i) s p = Node (S.encode (i,s)) (Forest (reverse p))
 
 instance (GToTree f, GToTree g) => GToTree (f :*: g) where
   gToTree (f :*: g) = do
-    m <- get
-    reset
-    f' <- gToTree f
-    g' <- gToTree g
-    let res a b | Forest xs <- a,
-                  Forest ys <- b  = Forest $ xs ++ ys
-                | Forest xs <- a  = Forest $ xs ++ [b]
-                | Forest ys <- b  = Forest $ a : ys
-                | otherwise       = Forest [a,b]
-    case m of
-      Nothing -> return $ res f' g'
-      Just i  -> return $ Node (S.encode i) (res f' g')
+    (mi,s) <- getSum
+    resetSum
+    gToSTree f
+    gToSTree g
+    p <- getProd
+    resetProd
+    return $ prodToTree mi s p
+  gToSTree (f :*: g) = do
+    gToSTree f
+    gToSTree g
 
-l1 :: State (Maybe Int) ()
+l1 :: State (ToState alg) ()
 l1 = do
-  m <- get
+  (m,s) <- getSum
   case m of
-    Nothing -> put (Just 0)
-    Just i  -> put (Just (shift i 1))
+    Nothing -> putSum (Just 0, 1)
+    Just i  -> putSum (Just i, s*2)
 
-r1 :: State (Maybe Int) ()
+r1 :: State (ToState alg) ()
 r1 = do
-  m <- get
+  (m,s) <- getSum
   case m of
-    Nothing -> put (Just 1)
-    Just i  -> put (Just (shift i 1 + 1))
+    Nothing -> putSum (Just 1, 1)
+    Just i  -> putSum (Just (i+s*2), s*2)
+
+sumToSTree :: (GToTree a) => a p -> State (ToState alg) ()
+sumToSTree x = do
+  p <- getProd
+  resetProd
+  y <- gToTree x
+  putProd p
+  pushProd y
 
 instance (GToTree f, GToTree g) => GToTree (f :+: g) where
   gToTree (L1 x) = do
@@ -108,16 +162,35 @@ instance (GToTree f, GToTree g) => GToTree (f :+: g) where
   gToTree (R1 x) = do
     r1
     gToTree x
+  gToSTree (L1 x) = do
+    l1
+    sumToSTree x
+  gToSTree (R1 x) = do
+    r1
+    sumToSTree x
+
+k1ToTree :: (ToTree a) => Count -> Size -> a -> BTree alg
+k1ToTree Nothing _ x = toTree x
+k1ToTree (Just i) s x = Node (S.encode (i,s)) (toTree x)
 
 instance (ToTree c) => GToTree (K1 i c) where
   gToTree (K1 x) = do
-    m <- get
-    case m of
-      Nothing -> return $ toTree x
-      Just i  -> return $ Node (S.encode i) (toTree x)
+    (m,s) <- getSum
+    resetSum
+    return $ k1ToTree m s x
+  gToSTree (K1 x) = do
+    (m,s) <- getSum
+    resetSum
+    pushProd $ k1ToTree m s x
+
 
 class FromTree a where
   fromTree :: BTree alg -> Either String a
+
+  default fromTree :: (Generic a, GFromTree (Rep a)) => BTree alg -> Either String a
+  fromTree x = do
+     y <- runGFromTree x
+     return (to y)
 
 deserialize :: (S.Serialize a) => BTree alg -> Either String a
 deserialize (Leaf b) = S.decode b
@@ -157,28 +230,6 @@ runGFromTree :: (GFromTree f) => BTree alg -> Either String (f p)
 runGFromTree = evalState (runExceptT gFromTree)
 
 
-{-
-getCount :: GMonad alg (Maybe Int)
-getCount = do
-  (_,r) <- lift get
-  return r
-
-getTree :: GMonad alg (BTree alg)
-getTree = do
-  (l,_) <- lift get
-  return l
-
-putCount :: Maybe Int -> GMonad alg ()
-putCount mi = do
-  t <- getTree
-  lift $ put (t,mi)
-
-putTree :: BTree alg -> GMonad alg ()
-putTree t = do
-  mi <- getCount
-  lift $ put (t,mi)
--}
-{-
 instance GFromTree U1 where
   gFromTree = do
     x <- lift get
@@ -202,6 +253,7 @@ instance GFromTree a => GFromTree (M1 i c a) where
         y <- gFromTree
         return (M1 y)
 
+
 instance (GFromTree f, GFromTree g) => GFromTree (f :*: g) where
   gFromTree = do
     x <- lift get
@@ -213,23 +265,24 @@ instance (GFromTree f, GFromTree g) => GFromTree (f :*: g) where
         return (l :*: r)
       _ -> throwError "Invalid encoding for :*:. Expected Forest."
 
-getInt :: B.ByteString -> GMonad alg Int
-getInt b = case S.decode b of
+getInts :: B.ByteString -> GMonad alg (Int, Size)
+getInts b = case S.decode b of
              Left s -> throwError s
-             Right i -> return i
+             Right is -> return is
 
-leafHelper :: (GFromTree g, GFromTree f) => Int -> ExceptT String (State (BTree alg)) ((:+:) f g p)
-leafHelper 0 = do
+leafHelper :: (GFromTree g, GFromTree f) => Int -> Size -> GMonad alg ((:+:) f g p)
+leafHelper i 1 = do
   lift $ put Empty
-  x <- gFromTree
-  return (L1 x)
-leafHelper 1 = do
-  lift $ put Empty
-  x <- gFromTree
-  return (R1 x)
-leafHelper i = do
+  if even i then do
+    x <- gFromTree
+    return (L1 x)
+  else do
+    x <- gFromTree
+    return (R1 x)
+leafHelper i s = do
   let j = shift i (-1)
-  lift $ put (serialize j)
+  let s' = s `div` 2
+  lift $ put (serialize (j,s'))
   if even i then do
     x <- gFromTree
     return (L1 x)
@@ -237,18 +290,19 @@ leafHelper i = do
     x <- gFromTree
     return (R1 x)
 
-nodeHelper :: (GFromTree g, GFromTree f) => BTree alg -> Int -> ExceptT String (State (BTree alg)) ((:+:) f g p)
-nodeHelper t 0 = do
+nodeHelper :: (GFromTree g, GFromTree f) => BTree alg -> Int -> Size -> GMonad alg ((:+:) f g p)
+nodeHelper t i 1 = do
   lift $ put t
-  x <- gFromTree
-  return (L1 x)
-nodeHelper t 1 = do
-  lift $ put t
-  x <- gFromTree
-  return (R1 x)
-nodeHelper t i = do
+  if even i then do
+    x <- gFromTree
+    return (L1 x)
+  else do
+    x <- gFromTree
+    return (R1 x)
+nodeHelper t i s = do
   let j = shift i (-1)
-  lift $ put (Node (S.encode j) t)
+  let s' = s `div` 2
+  lift $ put (Node (S.encode (j,s')) t)
   if even i then do
     x <- gFromTree
     return (L1 x)
@@ -262,15 +316,37 @@ instance (GFromTree f, GFromTree g) => GFromTree (f :+: g) where
     case x of
       (Hole _) -> return undefined
       (Leaf a) -> do
-        i <- getInt a
-        leafHelper i
+        (i,s) <- getInts a
+        leafHelper i s
       (Node a t) -> do
-        i <- getInt a
-        nodeHelper t i
+        (i,s) <- getInts a
+        nodeHelper t i s
       (Forest (Hole _:xs)) -> do
         lift $ put (Forest xs)
         return undefined
-      (Forest (Leaf a:xs)) -> undefined
-      (Forest (Node a t:xs)) -> undefined
+      (Forest (Leaf a:xs)) -> do
+        (i,s) <- getInts a
+        y <- leafHelper i s
+        lift $ put (Forest xs)
+        return y
+      (Forest (Node a t:xs)) -> do
+        (i,s) <- getInts a
+        y <- nodeHelper t i s
+        lift $ put (Forest xs)
+        return y
       _ -> throwError "Invalid encoding for :+:. Expected Leaf or Node."
--}
+
+k1FromTree :: (FromTree c) => BTree alg -> GMonad alg c
+k1FromTree t = case fromTree t of
+                 Left s -> throwError s
+                 Right c -> return c
+
+instance (FromTree c) => GFromTree (K1 i c) where
+  gFromTree = do
+    x <- lift get
+    case x of
+      (Hole _) -> return undefined
+      (Forest (Forest _ : xs)) -> undefined
+      y -> do
+        c <- k1FromTree y
+        return $ K1 c
