@@ -9,6 +9,7 @@ import qualified Data.Serialize as S
 import Data.Bits (shift)
 import Crypto.Hash
 import Control.Monad.Except
+import qualified Data.Tree as T
 
 data Tree a alg = Empty | Leaf a | Node a (Tree a alg) | Forest [Tree a alg] | Hole (Digest alg)
 
@@ -35,6 +36,25 @@ getDigest (Leaf a)    = hash a
 getDigest (Node a t)  = hashFinalize $ hashUpdate (hashUpdate hashInit (getDigest t)) a
 getDigest (Forest ts) = hashFinalize $ hashUpdates hashInit (fmap getDigest ts)
 getDigest (Hole d)    = d
+
+validate :: (HashAlgorithm alg) => BTree alg -> BTree alg -> Bool
+validate a b = getDigest a == getDigest b
+
+type Path = Maybe (T.Tree Int)
+
+fromPath :: (HashAlgorithm alg) => Path -> BTree alg -> BTree alg
+fromPath Nothing t = Hole (getDigest t)
+fromPath (Just (T.Node _ [])) Empty = Empty
+fromPath (Just (T.Node _ [])) (Leaf a) = Leaf a
+fromPath (Just (T.Node _ [i])) (Node a t) = Node a (fromPath (Just i) t)
+fromPath (Just (T.Node _ [])) (Node a t) = Node a (fromPath Nothing t)
+fromPath (Just (T.Node _ is)) (Forest ts) = Forest (snd pathFold)
+  where
+    iChildren = fmap (\t@(T.Node i _) -> (i,t)) is
+    foldFn x (cnt, ms) = (cnt-1, fromPath (lookup cnt iChildren) x:ms)
+    pathFold = foldr foldFn (length ts - 1,[]) ts
+fromPath _ (Hole d) = Hole d
+fromPath _ _ = error "Invalid path encoding for this tree."
 
 serialize :: (S.Serialize a) => a -> BTree alg
 serialize a = Leaf (S.encode a)
