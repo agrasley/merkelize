@@ -11,7 +11,21 @@ import Crypto.Hash
 import Control.Monad.Except
 
 data Tree a alg = Empty | Leaf a | Node a (Tree a alg) | Forest [Tree a alg] | Hole (Digest alg)
-  deriving (Show)
+
+instance Show a => Show (Tree a alg) where
+  show = pretty' 0
+
+spaces :: Int -> String
+spaces i = replicate i ' '
+
+pretty' :: (Show a) => Int -> Tree a alg -> String
+pretty' i Empty = spaces i ++ "Empty"
+pretty' i (Leaf a) = spaces i ++ "Leaf " ++ show a
+pretty' i (Node a t) = spaces i ++ "Node " ++ show a ++ "\n" ++ pretty' (i+2) t
+pretty' i (Forest ts) = spaces i ++ "Forest\n" ++ take (length res - 1) res
+  where
+    res = concatMap ((++ "\n") . pretty' (i+2)) ts
+pretty' i (Hole d) = spaces i ++ "Hash " ++ take 10 (show d) ++ "..."
 
 type BTree alg = Tree B.ByteString alg
 
