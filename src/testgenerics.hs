@@ -2,16 +2,19 @@
 module TestGenerics where
 
 import GHC.Generics
-import NewerTree
-import qualified Data.Tree as T
+import NewestTree
 
--- let y = [A, R, J E, Y Z] :: [AZ (AZ ())]
+-- let y = [A, R3, J E, Y Z] :: [AZ (AZ ())]
 -- let z = toTree y
--- let a = fromPath (Just (T.Node 0 [T.Node 0 [T.Node 0 []]])) z :: BTree SHA256
+-- let a = fromPath (One (L (One None))) z :: BTree SHA256
 -- let isHeadA (Right (A:_)) = True
 -- let a' = fromTree a :: Either String [AZ (AZ ())]
 -- isHeadA a'
-data AZ a = A | B a | C | D | E | F | G | H | I | J a | K | L | M | N | O | P a | Q | R | S | T | U | V | W | X | Y a | Z
+-- let b = fromPath (One (R (One (L (One None))))) z :: BTree SHA256
+-- let isSndR3 (Right (_:R3:_)) = True
+-- let b' = fromTree b :: Either String [AZ (AZ ())]
+-- isSndR3 b'
+data AZ a = A | B a | C | D | E | F | G | H | I | J a | K | L3 | M | N | O | P a | Q | R3 | S | T | U | V | W | X | Y a | Z
   deriving (Show, Generic)
 
 instance ToTree a => ToTree (AZ a)
