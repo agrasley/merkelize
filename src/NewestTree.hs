@@ -181,10 +181,7 @@ instance GFromTree a => GFromTree (M1 i c a) where
 
 instance (GFromTree f, GFromTree g) => GFromTree (f :*: g) where
   gFromTree (Hash _)  = Right undefined
-  gFromTree (Two l r) = do
-    l' <- gFromTree l
-    r' <- gFromTree r
-    return $ l' :*: r'
+  gFromTree (Two l r) = (:*:) <$> gFromTree l <*> gFromTree r
   gFromTree _         = Left "Invalid encoding for :*:. Expected Two."
   gFromTree' _ _ _    = Left "Invalid encoding for :+:. Expected Leaf or Node."
 

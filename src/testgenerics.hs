@@ -6,6 +6,7 @@ import NewestTree
 
 -- let y = [A, R3, J E, Y Z] :: [AZ (AZ ())]
 -- let z = toTree y
+-- let x = fromTree z :: Either String [AZ (AZ ())]
 -- let a = fromPath (One (L (One None))) z :: BTree SHA256
 -- let isHeadA (Right (A:_)) = True
 -- let a' = fromTree a :: Either String [AZ (AZ ())]
