@@ -66,7 +66,7 @@ class ToTree a where
 
 
 serialize :: (S.Serialize a) => a -> BTree alg
-serialize a = Leaf (S.encode a)
+serialize = Leaf . S.encode
 
 instance ToTree () where
   toTree () = Empty
@@ -134,12 +134,12 @@ class FromTree a where
 
 deserialize :: (S.Serialize a) => BTree alg -> Either String a
 deserialize (Leaf b) = S.decode b
-deserialize (Hash _) = Right undefined
+deserialize (Hash _) = Right $ error "Attempting to evaluate a hash summary."
 deserialize _        = Left "Expected Leaf."
 
 instance FromTree () where
   fromTree Empty    = Right ()
-  fromTree (Hash _) = Right undefined
+  fromTree (Hash _) = Right $ error "Attempting to evaluate a hash summary."
   fromTree _        = Left "Expected Empty."
 
 instance FromTree Bool where
@@ -170,26 +170,26 @@ class GFromTree f where
 
 instance GFromTree U1 where
   gFromTree Empty    = Right U1
-  gFromTree (Hash _) = Right undefined
+  gFromTree (Hash _) = Right $ error "Attempting to evaluate a hash summary."
   gFromTree _        = Left "Invalid encoding for U1. Expected Empty."
   gFromTree' _ _ _   = Left "Invalid encoding for :+:. Expected Leaf or Node."
 
 instance GFromTree a => GFromTree (M1 i c a) where
-  gFromTree (Hash _) = Right undefined
+  gFromTree (Hash _) = Right $ error "Attempting to evaluate a hash summary."
   gFromTree x        = fmap M1 (gFromTree x)
   gFromTree' c s t   = fmap M1 (gFromTree' c s t)
 
 instance (GFromTree f, GFromTree g) => GFromTree (f :*: g) where
-  gFromTree (Hash _)  = Right undefined
-  gFromTree (Two l r) = (:*:) <$> gFromTree l <*> gFromTree r
-  gFromTree _         = Left "Invalid encoding for :*:. Expected Two."
-  gFromTree' _ _ _    = Left "Invalid encoding for :+:. Expected Leaf or Node."
+  gFromTree h@(Hash _) = (:*:) <$> gFromTree h <*> gFromTree h
+  gFromTree (Two l r)  = (:*:) <$> gFromTree l <*> gFromTree r
+  gFromTree _          = Left "Invalid encoding for :*:. Expected Two."
+  gFromTree' _ _ _     = Left "Invalid encoding for :+:. Expected Leaf or Node."
 
 getInts :: B.ByteString -> Either String (Count,Size)
 getInts = S.decode
 
 instance (GFromTree f, GFromTree g) => GFromTree (f :+: g) where
-  gFromTree (Hash _)   = return undefined
+  gFromTree (Hash _)   = Right $ error "Attempting to evaluate a hash summary."
   gFromTree (Leaf a)   = do
     (c,s) <- getInts a
     gFromTree' c s Empty
@@ -206,6 +206,6 @@ instance (GFromTree f, GFromTree g) => GFromTree (f :+: g) where
                        s' = s `div` 2
 
 instance (FromTree c) => GFromTree (K1 i c) where
-  gFromTree (Hash _) = Right undefined
+  gFromTree (Hash _) = Right $ error "Attempting to evaluate a hash summary."
   gFromTree t        = fmap K1 (fromTree t)
   gFromTree' _ _ _   = Left "Invalid encoding for :+:. Expected Leaf or Node."
