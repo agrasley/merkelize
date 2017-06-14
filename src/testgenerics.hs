@@ -24,13 +24,13 @@ let x = [1,2,3] :: [Int]
 let y = toTree x
 let z = fromTree y :: Either String [Int]
 let a = fromPath (One (L (One None))) y :: BTree SHA256
-let isHead1 (Right (1:_)) = True
+let head' (Right (x:_)) = x
 let a' = fromTree a :: Either String [Int]
-isHead1 a'
+head' a'
 let b = fromPath (One (R (One (L (One None))))) y :: BTree SHA256
-let isSnd2 (Right (_:2:_)) = True
+let snd' (Right (_:x:_)) = x
 let b' = fromTree b :: Either String [Int]
-isSnd2 b'
+snd' b'
 let c = fromPath (One (Both (One None) (One (L (One None))))) y :: BTree SHA256
 let c' = fromTree c :: Either String [Int]
 -}

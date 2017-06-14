@@ -190,12 +190,10 @@ getInts = S.decode
 
 instance (GFromTree f, GFromTree g) => GFromTree (f :+: g) where
   gFromTree (Hash _)   = Right $ error "Attempting to evaluate a hash summary."
-  gFromTree (Leaf a)   = do
-    (c,s) <- getInts a
-    gFromTree' c s Empty
-  gFromTree (Node a t) = do
-    (c,s) <- getInts a
-    gFromTree' c s t
+  gFromTree (Leaf a)   = do (c,s) <- getInts a
+                            gFromTree' c s Empty
+  gFromTree (Node a t) = do (c,s) <- getInts a
+                            gFromTree' c s t
   gFromTree _          = Left "Invalid encoding for :+:. Expected Leaf or Node."
   gFromTree' c 1 t | even c    = fmap L1 (gFromTree t)
                    | otherwise = fmap R1 (gFromTree t)
