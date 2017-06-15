@@ -1,6 +1,17 @@
 {-# LANGUAGE TypeOperators, DefaultSignatures, FlexibleContexts #-}
 
-module NewestTree where
+module Data.Merkelize (
+    Tree(..),
+    BTree,
+    getDigest,
+    validate,
+    Path(..),
+    fromPath,
+    ToTree(..),
+    GToTree(..),
+    FromTree(..),
+    GFromTree(..)
+  ) where
 
 import qualified Data.ByteString as B
 import GHC.Generics
@@ -10,7 +21,7 @@ import Crypto.Hash
 
 
 
-
+-- |A tree datatype isomorphic to Haskell datatypes with holes.
 data Tree a alg = Hash (Digest alg) | Empty | Leaf a | Node a (Tree a alg) | Two (Tree a alg) (Tree a alg)
 
 instance Show a => Show (Tree a alg) where
@@ -19,6 +30,7 @@ instance Show a => Show (Tree a alg) where
 spaces :: Int -> String
 spaces i = replicate i ' '
 
+-- Pretty printer for Trees
 pretty :: (Show a) => Int -> Tree a alg -> String
 pretty i Empty       = spaces i ++ "Empty"
 pretty i (Leaf a)    = spaces i ++ "Leaf " ++ show a
@@ -28,9 +40,10 @@ pretty i (Hash d)    = spaces i ++ "Hash " ++ take 10 (show d) ++ "..."
 
 
 
-
+-- |Trees of 'Bytestring' values
 type BTree alg = Tree B.ByteString alg
 
+-- |Get the hash digest of an ADS represented as a 'BTree'.
 getDigest :: (HashAlgorithm alg) => BTree alg -> Digest alg
 getDigest Empty       = hashFinalize hashInit
 getDigest (Leaf a)    = hash a
@@ -38,18 +51,23 @@ getDigest (Node a t)  = hashFinalize $ hashUpdate (hashUpdate hashInit (getDiges
 getDigest (Two t1 t2) = hashFinalize $ hashUpdates hashInit [getDigest t1, getDigest t2]
 getDigest (Hash d)    = d
 
+-- |Check if two 'BTree' ADSs share the same top-level hash digest.
+-- Only returns 'True' if both arguments are derived from exactly isomorphic values.
 validate :: (HashAlgorithm alg) => BTree alg -> BTree alg -> Bool
 validate a b = getDigest a == getDigest b
 
-data Path = None | One Path | L Path | R Path | Both Path Path
+-- |An encoding of one or many paths through a 'Tree'
+data Path = None | One | Some Path | L Path | R Path | Both Path Path
   deriving Show
 
+-- |Given a path through an ADS, convert everything not included in the path into
+-- its hash digest and return the resulting ADS.
 fromPath :: (HashAlgorithm alg) => Path -> BTree alg -> BTree alg
 fromPath None         t          = Hash $ getDigest t
-fromPath (One None)   (Hash d)   = Hash d
-fromPath (One None)   Empty      = Empty
-fromPath (One None)   (Leaf a)   = Leaf a
-fromPath (One p)      (Node a t) = Node a (fromPath p t)
+fromPath _            (Hash d)   = Hash d
+fromPath One          Empty      = Empty
+fromPath One          (Leaf a)   = Leaf a
+fromPath (Some p)     (Node a t) = Node a (fromPath p t)
 fromPath (L p)        (Two l r)  = Two (fromPath p l) (fromPath None r)
 fromPath (R p)        (Two l r)  = Two (fromPath None l) (fromPath p r)
 fromPath (Both pl pr) (Two l r)  = Two (fromPath pl l) (fromPath pr r)
@@ -57,10 +75,12 @@ fromPath _            _          = error "Invalid path encoding for this tree."
 
 
 
-
+-- |Convert any type into a 'BTree'
 class ToTree a where
+  -- |Convert any value into an isomorphic 'BTree' value
   toTree :: a -> BTree alg
 
+  -- |Given a type implementing the 'Generic' class, convert any value generically into a 'BTree' value
   default toTree :: (Generic a, GToTree (Rep a)) => a -> BTree alg
   toTree = gToTree . from
 
@@ -95,8 +115,11 @@ instance ToTree Integer where
 type Size = Int
 type Count = Int
 
+-- |Transform a generic type to an isomorphic 'BTree'
 class GToTree f where
+  -- |Convert any generic value to an isomorphic 'BTree' value
   gToTree :: f p -> BTree alg
+  -- |Helper method to keep track of current state in a series of sum values
   gToTree' :: Count -> Size -> f p -> BTree alg
 
 
@@ -124,10 +147,14 @@ instance (ToTree c) => GToTree (K1 i c) where
 
 
 
-
+-- |Convert a BTree into the given type
 class FromTree a where
+  -- |Convert a BTree value into a value in a given type.
+  -- May fail with an error message if the BTree is not a valid encoding of the type 'a'.
   fromTree :: BTree alg -> Either String a
 
+  -- |Given a type implementing the 'Generic' class, convert a BTree value into a value of that type.
+  -- May fail with an error message if the BTree is not a valid encoding of the type 'a'.
   default fromTree :: (Generic a, GFromTree (Rep a)) => BTree alg -> Either String a
   fromTree x = fmap to (gFromTree x)
 
@@ -162,9 +189,11 @@ instance FromTree Integer where
 
 
 
-
+-- |Convert a 'BTree' into a generic type
 class GFromTree f where
+  -- |Convert a 'BTree' value into a generic value or fail with an error message.
   gFromTree :: BTree alg -> Either String (f p)
+  -- |Helper method to keep track of the current state in a series of sum values.
   gFromTree' :: Count -> Size -> BTree alg -> Either String (f p)
 
 

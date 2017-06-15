@@ -1,19 +1,23 @@
 {-# LANGUAGE DeriveGeneric #-}
 module TestGenerics where
 
+{-
+This is just a test file to make sure things are working right
+-}
+
 import GHC.Generics
-import NewestTree
+import Data.Merkelize
 import Crypto.Hash
 
 {-
 let y = [A, R3, J E, Y Z] :: [AZ (AZ ())]
 let z = toTree y
 let x = fromTree z :: Either String [AZ (AZ ())]
-let a = fromPath (One (L (One None))) z :: BTree SHA256
+let a = fromPath (Some (L One)) z :: BTree SHA256
 let isHeadA (Right (A:_)) = True
 let a' = fromTree a :: Either String [AZ (AZ ())]
 isHeadA a'
-let b = fromPath (One (R (One (L (One None))))) z :: BTree SHA256
+let b = fromPath (Some (R (Some (L One)))) z :: BTree SHA256
 let isSndR3 (Right (_:R3:_)) = True
 let b' = fromTree b :: Either String [AZ (AZ ())]
 isSndR3 b'
@@ -23,15 +27,15 @@ isSndR3 b'
 let x = [1,2,3] :: [Int]
 let y = toTree x
 let z = fromTree y :: Either String [Int]
-let a = fromPath (One (L (One None))) y :: BTree SHA256
+let a = fromPath (Some (L One)) y :: BTree SHA256
 let head' (Right (x:_)) = x
 let a' = fromTree a :: Either String [Int]
 head' a'
-let b = fromPath (One (R (One (L (One None))))) y :: BTree SHA256
+let b = fromPath (Some (R (Some (L One)))) y :: BTree SHA256
 let snd' (Right (_:x:_)) = x
 let b' = fromTree b :: Either String [Int]
 snd' b'
-let c = fromPath (One (Both (One None) (One (L (One None))))) y :: BTree SHA256
+let c = fromPath (Some (Both One (Some (L One)))) y :: BTree SHA256
 let c' = fromTree c :: Either String [Int]
 -}
 
@@ -41,7 +45,7 @@ let y = toTree x
 let z = fromTree y :: Either String (Int,Int,Int,Int)
 let a = fromPath (Both None None) y :: BTree SHA256
 let a' = fromTree a :: Either String (Int,Int,Int,Int)
-let b = fromPath (R (L (One None))) y :: BTree SHA256
+let b = fromPath (R (L One)) y :: BTree SHA256
 let b' = fromTree b :: Either String (Int,Int,Int,Int)
 let third (Right (_, _, x, _)) = x
 -}
