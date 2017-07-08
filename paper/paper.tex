@@ -1,0 +1,13 @@
+\documentclass[11pt]{article}
+
+\title{Authenticated Data Structures}
+\author{Alex Grasley}
+
+\begin{document}
+\maketitle
+\section{Contributions}
+
+Previous work on ADSs by Miller et al. relied on a language extension at the compiler level to achieve their generic ADS implementation. We show that a language with sufficient abstraction capabilities, such as Haskell's typeclasses and support for datatype-generic programming, permits the derivation of ADSs for any datatype for free as a library. This solution, based on common Haskell patterns for data serialization, easily allows for conversion to and from plain values and their ADS equivalents. In this way, we avoid the overhead of having to redefine every datatype as an equivalent ADS, complete with duplicate functions to operate over such datatypes. The typeclass-based deriving method also easily supports polymorphic datatypes, which were absent from previous work. We show that our implementation maintains the full correctness and security guarantees expected of ADS implementations.
+
+
+\end{document}  
